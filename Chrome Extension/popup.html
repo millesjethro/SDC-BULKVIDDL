@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>SDC Bulk Downloader</title>
+<style>
+  body { font: 14px system-ui, sans-serif; width: 280px; padding: 12px; }
+  h1 { font-size: 17px; margin-top: 0; }
+  input, select, button { box-sizing: border-box; display: block; width: 100%; margin-top: 8px; padding: 8px; font: inherit; }
+  #status { margin-bottom: 0; }
+</style>
+<h1>SDC Bulk Downloader</h1>
+<p>Click Connect Chrome in the downloader and paste its one-time code here.</p>
+<form id="connect">
+  <label for="platform">Platform</label>
+  <select id="platform">
+    <option value="instagram">Instagram</option>
+    <option value="threads">Threads</option>
+    <option value="facebook">Facebook</option>
+  </select>
+  <label for="code">Pairing code</label>
+  <input id="code" required autocomplete="off" spellcheck="false">
+  <button type="submit">Send to Downloader</button>
+</form>
+<p id="status" role="status"></p>
+<script src="popup.js"></script>
+</html>

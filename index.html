@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video Bulk Downloader</title>
+<style>
+:root{
+  --bg:#121317; --ink:#eef1f8; --mute:#9aa2b8; --faint:#6f768b;
+  --panel-a:#3a4060; --panel-b:#2a2e45; --well:rgba(12,14,26,.42);
+  --field:rgba(255,255,255,.075); --field-h:rgba(255,255,255,.11);
+  --line:rgba(255,255,255,.09);
+  --mint:#86eaaf; --mint-2:#4fd488; --mint-ink:#052a1a;
+  --red:#ff7b7b; --red-2:#e95a68; --blue:#5b93ff; --amber:#ffc46b;
+  --r:18px;
+}
+@media (prefers-color-scheme: light){ :root{} }
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;color:var(--ink);font:14px/1.4 "Segoe UI Variable Text","Segoe UI",Inter,system-ui,sans-serif;
+  background:
+   radial-gradient(1100px 620px at 8% -12%, #2c3358 0%, transparent 62%),
+   radial-gradient(900px 560px at 108% 112%, #173d31 0%, transparent 58%), var(--bg);
+  background-attachment:fixed; overflow:hidden; -webkit-font-smoothing:antialiased}
+.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--mint);outline-offset:2px}
+
+.app{height:100vh;display:flex;flex-direction:column;padding:14px 18px 18px;gap:14px;min-width:980px}
+header{display:flex;align-items:center;gap:14px;height:34px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.14em;font-size:13px}
+.logo{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;color:var(--mint-ink);
+  background:linear-gradient(145deg,var(--mint),var(--mint-2));box-shadow:0 4px 14px rgba(79,212,136,.35)}
+.logo .i{width:15px;height:15px;stroke-width:2.6}
+.grow{flex:1}
+.pill-chip{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:99px;font-size:11.5px;
+  background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--mute)}
+.pill-chip b{color:var(--ink);font-weight:600}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--mint-2);box-shadow:0 0 8px var(--mint-2)}
+.dot.bad{background:var(--red-2);box-shadow:0 0 8px var(--red-2)} .dot.warn{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.winbtn{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;transition:transform .15s,filter .15s}
+.winbtn:hover{transform:scale(1.12);filter:brightness(1.15)} .winbtn .i{width:13px;height:13px}
+.winbtn.blue{background:var(--blue);box-shadow:0 0 14px rgba(91,147,255,.55)}
+.winbtn.red{background:var(--red-2);box-shadow:0 0 14px rgba(233,90,104,.5)}
+.winbtn.spin .i{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+main{flex:1;min-height:0;display:grid;grid-template-columns:410px 1fr;gap:18px}
+
+/* ---------- left panel ---------- */
+aside{display:flex;flex-direction:column;gap:14px;min-height:0}
+.panel{flex:1;min-height:0;overflow:auto;border-radius:22px;padding:14px;display:flex;flex-direction:column;gap:10px;
+  background:linear-gradient(160deg,var(--panel-a),var(--panel-b));border:1px solid var(--line);
+  box-shadow:0 18px 40px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.07)}
+.panel::-webkit-scrollbar{width:0}
+.well{background:var(--well);border:1px solid rgba(255,255,255,.05);border-radius:var(--r);padding:11px;display:flex;gap:10px;align-items:center}
+.well.col{flex-direction:column;align-items:stretch}
+.stack{display:flex;flex-direction:column;gap:9px;flex:1;min-width:0}
+.field{position:relative;display:flex;align-items:center;gap:9px;height:40px;padding:0 14px;border-radius:99px;min-width:0;flex:1;
+  background:var(--field);border:1px solid transparent;color:var(--mute);transition:background .15s,border-color .15s,box-shadow .15s}
+.field:hover{background:var(--field-h)}
+.field:focus-within{background:var(--field-h);border-color:rgba(134,234,175,.6);box-shadow:0 0 0 4px rgba(134,234,175,.13);color:var(--mint)}
+.field input{flex:1;min-width:0;border:0;background:none;outline:0;color:var(--ink);font-size:13px;letter-spacing:.02em}
+.field input::placeholder{color:var(--faint);text-transform:uppercase;font-size:11.5px;letter-spacing:.09em;font-weight:600}
+.field .suffix{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--mint);background:rgba(134,234,175,.12);padding:3px 8px;border-radius:99px;text-transform:uppercase}
+.stack .field{flex:none}
+.field.click{cursor:pointer;user-select:none}
+.field.click .label{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11.5px;letter-spacing:.09em;font-weight:600;color:var(--faint);text-transform:uppercase}
+.field.click.has .label{color:var(--ink);text-transform:none;letter-spacing:.02em;font-size:13px;font-weight:500}
+.shake{animation:shake .35s}
+@keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+
+.btn{height:40px;padding:0 20px;border-radius:99px;font-weight:800;font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:transform .12s,filter .15s,box-shadow .15s,opacity .15s;white-space:nowrap}
+.btn:active:not(:disabled){transform:translateY(1px) scale(.98)}
+.btn.mint{color:var(--mint-ink);background:linear-gradient(180deg,var(--mint),var(--mint-2));box-shadow:0 6px 18px rgba(79,212,136,.28),inset 0 1px 0 rgba(255,255,255,.45)}
+.btn.mint:hover:not(:disabled){filter:brightness(1.07);box-shadow:0 8px 24px rgba(79,212,136,.4),inset 0 1px 0 rgba(255,255,255,.45)}
+.btn.rose{color:#3a0b12;background:linear-gradient(180deg,#ffb1b1,#f08a94)}
+.btn.rose:hover:not(:disabled){filter:brightness(1.06)}
+.btn.stop{color:#fff;background:linear-gradient(180deg,#f27078,#d6455a);box-shadow:0 6px 18px rgba(233,90,104,.35)}
+.btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+.round{width:52px;height:52px;border-radius:50%;padding:0;flex:none;align-self:center}
+.round .i{width:24px;height:24px;stroke-width:2.6}
+
+/* zip toggle */
+.seg{position:relative;display:grid;grid-template-columns:1fr 1fr;height:40px;border-radius:99px;background:var(--field);padding:4px;flex:none;width:176px}
+.seg i{position:absolute;top:4px;bottom:4px;left:4px;width:calc(50% - 4px);border-radius:99px;
+  background:linear-gradient(180deg,var(--mint),var(--mint-2));box-shadow:0 3px 10px rgba(79,212,136,.35);transition:transform .22s cubic-bezier(.3,.9,.3,1)}
+.seg.off i{transform:translateX(100%)}
+.seg button{position:relative;z-index:1;font-size:11.5px;font-weight:800;letter-spacing:.08em;color:var(--mute);transition:color .2s}
+.seg button.on{color:var(--mint-ink)}
+
+/* farmers */
+.farm{display:flex;align-items:center;gap:12px;cursor:pointer;user-select:none;padding:0}
+.sw{position:relative;width:46px;height:26px;border-radius:99px;background:rgba(255,255,255,.14);flex:none;transition:background .2s}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.4);transition:transform .22s cubic-bezier(.3,.9,.3,1)}
+.farm.on .sw{background:linear-gradient(180deg,var(--mint),var(--mint-2))} .farm.on .sw::after{transform:translateX(20px)}
+.farm .t{flex:1;height:40px;border-radius:99px;display:grid;place-items:center;font-weight:800;font-size:12px;letter-spacing:.1em;
+  background:rgba(255,255,255,.88);color:#1b1e2c;transition:background .2s}
+.farm.on .t{background:linear-gradient(180deg,var(--mint),var(--mint-2));color:var(--mint-ink)}
+.preview{font:11.5px/1.45 ui-monospace,"Cascadia Mono",Consolas,monospace;color:var(--mute);padding:2px 6px 0;word-break:break-word}
+.preview b{color:var(--mint);font-weight:600}
+.hint{font-size:11.5px;color:var(--faint);padding:0 4px}
+
+.actions{display:grid;grid-template-columns:1fr 1.25fr;gap:14px}
+.actions .btn{height:44px}
+.summary{display:flex;flex-direction:column;gap:8px;padding:0 4px;min-height:44px}
+.overall{height:6px;border-radius:9px;background:rgba(255,255,255,.08);overflow:hidden}
+.overall i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--mint-2),var(--mint));border-radius:9px;transition:width .4s}
+.sumtxt{font-size:12px;color:var(--mute);display:flex;gap:12px;flex-wrap:wrap}
+.sumtxt b{color:var(--ink)}
+
+/* ---------- queue ---------- */
+.queue{min-height:0;display:flex;flex-direction:column;border-radius:22px;position:relative;overflow:hidden;
+  background:linear-gradient(160deg,rgba(255,255,255,.075),rgba(255,255,255,.035));border:1px solid var(--line);
+  box-shadow:0 18px 40px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.06)}
+.qhead{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.qhead h2{margin:0;font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:800}
+.count{min-width:24px;padding:2px 8px;border-radius:99px;background:rgba(134,234,175,.15);color:var(--mint);font-size:12px;font-weight:700;text-align:center}
+.sel{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--mute)}
+.sel select{background:var(--field);border:0;border-radius:99px;padding:6px 26px 6px 12px;outline:0;cursor:pointer;color:var(--ink);font-weight:600;font-size:12px;
+  appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--mute) 50%),linear-gradient(135deg,var(--mute) 50%,transparent 50%);
+  background-position:calc(100% - 14px) 52%,calc(100% - 9px) 52%;background-size:5px 5px;background-repeat:no-repeat}
+.hr{cursor:pointer;user-select:none;margin-right:6px}
+.sw.mini{width:36px;height:20px}.sw.mini::after{width:14px;height:14px}
+.hr.on .sw{background:linear-gradient(180deg,var(--mint),var(--mint-2))}.hr.on .sw::after{transform:translateX(16px)}
+.sel select option{background:#2a2e45}
+.sel select:disabled{opacity:.5}
+.scroll{flex:1;overflow:auto;padding:18px}
+.scroll::-webkit-scrollbar{width:10px} .scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:9px;border:3px solid transparent;background-clip:content-box}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:20px 16px;align-content:start}
+.empty{position:absolute;inset:57px 0 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--mute);pointer-events:none;text-align:center}
+.empty .ring{width:78px;height:78px;border-radius:26px;display:grid;place-items:center;border:1.5px dashed rgba(255,255,255,.22);color:var(--mute)}
+.empty .ring .i{width:32px;height:32px;stroke-width:1.6}
+.empty strong{color:var(--ink);font-size:15px;font-weight:600}
+.empty small{color:var(--faint);font-size:12px}
+.queue.drag::after{content:"Drop links to add them";position:absolute;inset:8px;border-radius:18px;border:2px dashed var(--mint);
+  background:rgba(79,212,136,.12);display:grid;place-items:center;font-weight:700;color:var(--mint);letter-spacing:.06em;z-index:5}
+
+/* cards */
+.card{display:flex;flex-direction:column;gap:7px;animation:pop .3s cubic-bezier(.3,.9,.3,1)}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.96)}}
+.thumb{position:relative;aspect-ratio:4/5;border-radius:16px;overflow:hidden;background:linear-gradient(160deg,#4a5070,#2d3148);
+  box-shadow:0 8px 20px rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);transition:transform .2s,box-shadow .2s}
+.card:hover .thumb{transform:translateY(-2px);box-shadow:0 12px 26px rgba(0,0,0,.5)}
+.thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .4s}
+.thumb img.ok{opacity:1}
+.thumb img.ok~.ph{display:none}
+.ph{position:absolute;inset:0;display:grid;place-items:center;color:rgba(255,255,255,.28)} .ph .i{width:34px;height:34px;stroke-width:1.4}
+.chip{position:absolute;z-index:2;font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:99px;background:rgba(10,12,22,.62);backdrop-filter:blur(8px);letter-spacing:.03em}
+.chip.src{left:8px;top:8px} .chip.dur{left:8px;bottom:12px;font-variant-numeric:tabular-nums} .chip.dur:empty,.chip.src:empty{display:none}
+.x{position:absolute;z-index:4;right:7px;top:7px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
+  background:rgba(10,12,22,.7);backdrop-filter:blur(8px);color:#fff;opacity:0;transform:scale(.8);transition:.15s}
+.x .i{width:12px;height:12px;stroke-width:3}
+.card:hover .x{opacity:1;transform:none} .x:hover{background:var(--red-2)}
+.card.st-downloading .x{display:none}
+.over{position:absolute;inset:0;z-index:3;display:none;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:10px;font-weight:700}
+.bar{position:absolute;left:0;right:0;bottom:0;height:5px;background:rgba(0,0,0,.45);z-index:3;display:none}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--mint-2),var(--mint));transition:width .35s}
+.st-fetching .thumb::before{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.14) 50%,transparent 70%);background-size:220% 100%;animation:shimmer 1.3s infinite}
+@keyframes shimmer{from{background-position:120% 0}to{background-position:-120% 0}}
+.st-fetching .over{display:flex;font-size:11px;color:var(--mute);letter-spacing:.06em;text-transform:uppercase;justify-content:flex-end;padding-bottom:14px}
+.st-downloading .over{display:flex;background:linear-gradient(0deg,rgba(6,10,20,.78),rgba(6,10,20,.18) 70%);justify-content:center}
+.st-downloading .bar{display:block}
+.pct{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;text-shadow:0 2px 10px rgba(0,0,0,.6)}
+.st-done .over{display:flex;background:rgba(10,52,32,.55)}
+.st-done .thumb{border-color:rgba(134,234,175,.7)}
+.okmark{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(180deg,var(--mint),var(--mint-2));color:var(--mint-ink);box-shadow:0 6px 18px rgba(0,0,0,.4)}
+.okmark .i{width:24px;height:24px;stroke-width:3.2}
+.st-error .over{display:flex;background:rgba(80,10,24,.62)}
+.st-error .thumb{border-color:rgba(255,123,123,.7)}
+.retry{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;background:rgba(255,255,255,.92);color:#5a1020;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.retry .i{width:13px;height:13px;stroke-width:2.6}
+.over>*{display:none}
+.st-fetching .over .t-fetch,.st-downloading .over .t-dl,.st-error .over .retry,.st-error .over .t-err{display:flex}
+.st-done .over .okmark{display:grid;place-items:center}
+.t-fetch,.t-dl{flex-direction:column;align-items:center;gap:2px} .t-dl small{font-size:11px;color:#cfd6e8;font-weight:600}
+.t-err{font-size:11px;color:#ffd0d0;font-weight:600}
+.nm{width:100%;height:30px;border:0;border-radius:99px;background:transparent;text-align:center;outline:0;font-size:13px;font-weight:700;color:var(--ink);padding:0 10px;text-overflow:ellipsis;transition:background .15s}
+.nm::placeholder{color:var(--faint);font-weight:500}
+.nm:hover:not(:disabled){background:rgba(255,255,255,.07)}
+.nm:focus{background:rgba(255,255,255,.12);box-shadow:0 0 0 2px rgba(134,234,175,.55);text-align:left}
+.nm:disabled{opacity:.9;cursor:default}
+.pick{display:flex;justify-content:center;align-items:center;gap:3px;min-height:0}
+.pick button{white-space:nowrap}
+.pick .nav{padding-inline:4px}
+.add-well{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px}
+.add-well .stack{display:contents}
+.add-well .link-field,.highlight-dates{grid-column:1/-1}
+.highlight-dates{display:grid;grid-template-columns:1.2fr 1fr;gap:5px}
+.highlight-dates .field{min-width:0;flex:1;padding-inline:6px;gap:4px}
+.highlight-dates input{letter-spacing:0;width:100%;font-size:12px}
+.chrome-connect{display:flex;align-items:center;gap:5px}
+.pick:empty{display:none}
+.pick button{font:inherit;font-size:11px;font-weight:700;padding:2px 5px;border-radius:9px;border:1px solid rgba(255,255,255,.2);
+  background:transparent;color:var(--faint);cursor:pointer}
+.pick button.on{background:var(--mint);border-color:var(--mint);color:#0b1c12}
+.pick button:disabled{cursor:default;opacity:.7}
+.pv{font-size:10.5px;line-height:1.35;text-align:center;color:var(--faint);padding:0 4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;min-height:14px}
+.pv.err{color:#ff9b9b}
+
+.toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,30px);opacity:0;pointer-events:none;z-index:50;display:flex;align-items:center;gap:12px;
+  padding:11px 12px 11px 18px;border-radius:99px;background:#20243a;border:1px solid var(--line);box-shadow:0 16px 40px rgba(0,0,0,.55);font-weight:600;transition:.3s cubic-bezier(.3,.9,.3,1)}
+.toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.toast .btn{height:30px;padding:0 14px;font-size:11px}
+.offline{display:none;position:fixed;inset:0;z-index:60;background:rgba(10,11,16,.86);place-items:center;text-align:center;font-weight:600;color:var(--mute)}
+.offline.show{display:grid}
+
+@media (max-width:1100px){ main{grid-template-columns:370px 1fr} }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
+<symbol id="i-pen" viewBox="0 0 24 24"><path d="M17 3a2.8 2.8 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+<symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5 10 17.5 19 7"/></symbol>
+<symbol id="i-retry" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10.5 12 15.5l5-5M5 20h14"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+<symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9M6.3 6.8a8 8 0 1 0 11.4 0"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2M3 12A9 9 0 0 1 18.5 5.8M18.5 2v4h-4M5.5 22v-4h4"/></symbol>
+<symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3"/></symbol>
+</defs></svg>
+
+<div class="app">
+  <header>
+    <div class="brand"><span class="logo"><svg class="i"><use href="#i-download"/></svg></span>VIDEO BULK DOWNLOADER</div>
+    <div class="grow"></div>
+    <span class="pill-chip" id="chipYt"><span class="dot bad"></span><span>yt-dlp</span></span>
+    <span class="pill-chip" id="chipFf" title=""><span class="dot warn"></span><span>ffmpeg</span></span>
+    <div class="chrome-connect">
+      <button type="button" class="btn" id="connectChrome">CONNECT CHROME:</button>
+      <span class="pill-chip" data-session="instagram"><span class="dot warn"></span><span>IG</span></span>
+      <span class="pill-chip" data-session="facebook"><span class="dot warn"></span><span>FB</span></span>
+      <span class="pill-chip" data-session="threads"><span class="dot warn"></span><span>TH</span></span>
+    </div>
+    <button class="winbtn blue" id="btnUpdate" title="Update yt-dlp"><svg class="i"><use href="#i-refresh"/></svg></button>
+  </header>
+
+  <main>
+    <aside>
+      <div class="panel">
+        <div class="well add-well">
+          <div class="stack">
+            <label class="field link-field"><svg class="i"><use href="#i-link"/></svg><input id="url" placeholder="URL or link" autocomplete="off" spellcheck="false"></label>
+            <div class="highlight-dates">
+              <label class="field" title="First posting date to include"><span>Highlights</span><input type="date" id="highlightStart"></label>
+              <label class="field" title="Last posting date to include"><span>To:</span><input type="date" id="highlightEnd"></label>
+            </div>
+            <label class="field"><svg class="i"><use href="#i-pen"/></svg><input id="nm" placeholder="File name / part of name" autocomplete="off" spellcheck="false"></label>
+          </div>
+          <button class="btn mint round" id="btnAdd" title="Add to queue"><svg class="i"><use href="#i-plus"/></svg></button>
+        </div>
+
+        <div class="well">
+          <label class="field"><svg class="i"><use href="#i-folder"/></svg><input id="folder" placeholder="Download folder" spellcheck="false"></label>
+          <button class="btn mint" id="btnFolder">Browse</button>
+        </div>
+
+        <div class="well">
+          <label class="field" title="Name of the ZIP file, or of the folder when ZIP is off"><svg class="i"><use href="#i-pen"/></svg><input id="fname" placeholder="Folder name" spellcheck="false"><span class="suffix" id="suffix">.zip</span></label>
+          <div class="seg" id="seg"><i></i><button id="zipOn" class="on">ZIP</button><button id="zipOff">NOT ZIP</button></div>
+        </div>
+
+        <div class="well">
+          <div class="field click" id="xlPick" title="Column A = urls, Column B = file name"><svg class="i"><use href="#i-table"/></svg><span class="label" id="xlLabel">Browse Excel file</span></div>
+          <button class="btn mint" id="btnImport">Add</button>
+        </div>
+
+        <div class="well col">
+          <div class="farm" id="farm" role="switch" aria-checked="false" tabindex="0"><span class="sw"></span><span class="t">FARMERS FILE NAMING</span></div>
+          <div class="preview" id="preview"></div>
+        </div>
+        <div class="hint">Excel: A = <b>urls</b>, B = <b>file name</b> · paste or drop links anywhere</div>
+      </div>
+
+      <div class="actions">
+        <button class="btn rose" id="btnClear"><svg class="i"><use href="#i-trash"/></svg>Clear</button>
+        <button class="btn mint" id="btnGo"><svg class="i"><use href="#i-download"/></svg><span>Download</span></button>
+      </div>
+      <div class="summary"><div class="overall"><i id="overall"></i></div><div class="sumtxt" id="sumtxt"></div></div>
+    </aside>
+
+    <section class="queue" id="queue">
+      <div class="qhead">
+        <h2>Queue</h2><span class="count" id="count">0</span>
+        <div class="grow"></div>
+        <div class="sel hr" id="hires" role="switch" aria-checked="false" tabindex="0" title="Merges best video + audio with ffmpeg (1080p and above). Off = faster, ready-made MP4 only."><span>High-res</span><span class="sw mini"></span></div>
+        <label class="sel">Instagram login
+          <select id="igBrowser">
+            <option value="">Default browser setting</option><option value="firefox">Firefox</option>
+            <option value="chrome">Chrome</option><option value="edge">Edge</option><option value="brave">Brave</option>
+          </select></label>
+        <label class="sel">Quality
+          <select id="quality"><option value="best">Best</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option><option value="360">360p</option></select></label>
+        <label class="sel">Parallel
+          <select id="parallel"><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+      </div>
+      <div class="scroll"><div class="grid" id="grid"></div></div>
+      <div class="empty" id="empty"><div class="ring"><svg class="i"><use href="#i-video"/></svg></div><strong>Add a link to build your queue</strong><small>Paste a link, drop one here, or import an Excel file</small></div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"><span id="toastTxt"></span><button class="btn mint" id="toastBtn" style="display:none">Open folder</button></div>
+<div class="offline" id="offline"><div>Lost connection to the app.<br><small>It may have been closed. Re-run vbd.py to start it again.</small></div></div>
+
+<script>
+const TOKEN = "__TOKEN__";
+const $ = s => document.querySelector(s);
+const icon = n => `<svg class="i"><use href="#i-${n}"/></svg>`;
+let hiresOn = false, first = true, S = null, xlPath = "", zipOn = true, farmersOn = false, lastRun = 0, busy = false, timer, pushT, toastT, resultPath = "";
+
+async function api(path, body) {
+  const r = await fetch(path, { method: body === undefined ? "GET" : "POST",
+    headers: { "X-Token": TOKEN, "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body) });
+  const data = await r.json();
+  if ((path === "/api/settings" || path === "/api/browse-folder") && data.error) toast(data.error);
+  return data;
+}
+function toast(msg, btn) {
+  $("#toastTxt").textContent = msg;
+  const b = $("#toastBtn"); b.style.display = btn ? "" : "none"; if (btn) resultPath = btn;
+  const t = $("#toast"); t.classList.add("show"); clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove("show"), btn ? 9000 : 3200);
+}
+$("#toastBtn").onclick = () => { api("/api/open", { path: resultPath }); $("#toast").classList.remove("show"); };
+
+$("#connectChrome").onclick = async () => {
+  try {
+    const { code } = await api("/api/chrome-pair", {});
+    if (!code) throw new Error("Missing pairing code");
+    await navigator.clipboard.writeText(code);
+    toast("Pairing code copied. Paste it into the Chrome companion.");
+  } catch {
+    toast("Could not copy the pairing code. Allow clipboard access and try again.");
+  }
+};
+
+/* ---------- settings ---------- */
+function settingsBody() {
+  return { folder: $("#folder").value.trim(), folder_name: $("#fname").value.trim(), zip: zipOn, farmers: farmersOn,
+           instagram_browser: $("#igBrowser").value, quality: $("#quality").value, hires: hiresOn, parallel: +$("#parallel").value };
+}
+function pushSettings(now) {
+  clearTimeout(pushT);
+  const go = async () => { await api("/api/settings", settingsBody()); poll(); };
+  now ? go() : (pushT = setTimeout(go, 350));
+}
+function paintZip() {
+  $("#seg").classList.toggle("off", !zipOn);
+  $("#zipOn").classList.toggle("on", zipOn); $("#zipOff").classList.toggle("on", !zipOn);
+  $("#suffix").textContent = zipOn ? ".zip" : "folder";
+}
+function paintFarmers() {
+  $("#farm").classList.toggle("on", farmersOn); $("#farm").setAttribute("aria-checked", farmersOn);
+  paintPreview();
+}
+function paintPreview() {
+  const el = $("#preview"), today = (S && S.today) || "MM-DD-YYYY";
+  el.innerHTML = farmersOn
+    ? `<b>{Social Media}</b> video captured <b>${today}</b>, and posted <b>{File name}</b>`
+    : `Files are saved using the name you type (or the video title).`;
+}
+$("#zipOn").onclick = () => { zipOn = true; paintZip(); pushSettings(true); };
+$("#zipOff").onclick = () => { zipOn = false; paintZip(); pushSettings(true); };
+const toggleFarm = () => { farmersOn = !farmersOn; paintFarmers(); pushSettings(true); };
+$("#farm").onclick = toggleFarm;
+$("#farm").onkeydown = e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleFarm(); } };
+["#folder", "#fname"].forEach(s => $(s).addEventListener("input", () => pushSettings()));
+const toggleHires = () => { hiresOn = !hiresOn; paintHires(); pushSettings(true);
+  if (hiresOn && S && !S.ffmpeg_ok) toast(S.ffmpeg ? "ffmpeg.exe found but it won't start (missing DLLs) – use a static build" : "Put ffmpeg.exe next to vbd.py for high-res"); };
+function paintHires() { $("#hires").classList.toggle("on", hiresOn); $("#hires").setAttribute("aria-checked", hiresOn); }
+$("#hires").onclick = toggleHires; $("#hires").onkeydown = e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleHires(); } };
+["#igBrowser", "#quality", "#parallel"].forEach(s => $(s).addEventListener("change", () => pushSettings(true)));
+
+$("#btnFolder").onclick = async () => {
+  const r = await api("/api/browse-folder", {});
+  if (r.ok && r.path) $("#folder").value = r.path;
+};
+
+/* ---------- adding ---------- */
+async function addLinks(text, name) {
+  text = (text || "").trim();
+  if (!text) { const f = $("#url").closest(".field"); f.classList.remove("shake"); void f.offsetWidth; f.classList.add("shake"); $("#url").focus(); return; }
+  const r = await api("/api/add", { url: text, name: name || "", highlight_start: $("#highlightStart").value, highlight_end: $("#highlightEnd").value });
+  toast(r.msg); if (r.ok) poll();
+  return r.ok;
+}
+function localDate() {
+  const now = new Date();
+  return [now.getFullYear(), now.getMonth() + 1, now.getDate()]
+    .map(n => String(n).padStart(2, "0")).join("-");
+}
+$("#highlightEnd").value = localDate();
+$("#nm").value = localDate();
+
+async function addFromForm() {
+  if (await addLinks($("#url").value, $("#nm").value)) { $("#url").value = ""; $("#nm").value = localDate(); }
+  $("#url").focus();
+}
+$("#btnAdd").onclick = addFromForm;
+["#url", "#nm", "#highlightStart", "#highlightEnd"].forEach(s => $(s).addEventListener("keydown", e => { if (e.key === "Enter") addFromForm(); }));
+
+$("#xlPick").onclick = async () => {
+  const r = await api("/api/browse-excel", {});
+  if (r.path) setXl(r.path);
+};
+function setXl(p) { xlPath = p; $("#xlLabel").textContent = p ? p.split(/[\\/]/).pop() : "Browse Excel file"; $("#xlPick").classList.toggle("has", !!p); }
+$("#btnImport").onclick = async () => {
+  if (!xlPath) { const r = await api("/api/browse-excel", {}); if (!r.path) return; setXl(r.path); }
+  const r = await api("/api/import", { path: xlPath, highlight_start: $("#highlightStart").value, highlight_end: $("#highlightEnd").value });
+  toast(r.msg); if (r.ok) { setXl(""); poll(); }
+};
+/* paste / drop links anywhere */
+document.addEventListener("paste", e => {
+  if (/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+  const t = (e.clipboardData || window.clipboardData).getData("text");
+  if (/https?:\/\/|\w+\.\w+\//.test(t)) addLinks(t);
+});
+const qEl = $("#queue");
+["dragenter", "dragover"].forEach(n => qEl.addEventListener(n, e => { e.preventDefault(); qEl.classList.add("drag"); }));
+["dragleave", "drop"].forEach(n => qEl.addEventListener(n, e => { e.preventDefault(); qEl.classList.remove("drag"); }));
+qEl.addEventListener("drop", e => { const t = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text"); if (t) addLinks(t); });
+
+/* ---------- buttons ---------- */
+$("#btnClear").onclick = async () => { await api("/api/clear", {}); cards.forEach(c => c.remove()); cards.clear(); poll(); };
+$("#btnGo").onclick = async () => {
+  if (S && S.run.active) { await api("/api/cancel", {}); toast("Stopping…"); }
+  else { if (!(await api("/api/settings", settingsBody())).ok) return; const r = await api("/api/download", {}); if (!r.ok) toast("Nothing to download yet"); }
+  poll();
+};
+$("#btnUpdate").onclick = async () => {
+  const b = $("#btnUpdate"); b.classList.add("spin"); toast("Updating yt-dlp…");
+  const r = await api("/api/update", {}); b.classList.remove("spin"); toast(r.msg || "Done"); poll();
+};
+
+/* ---------- cards ---------- */
+const cards = new Map();
+function fmtDur(s) { if (!s) return ""; const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); }
+function makeCard(it) {
+  const el = document.createElement("div"); el.className = "card"; el.dataset.id = it.id;
+  el.innerHTML = `<div class="thumb"><img alt="" referrerpolicy="no-referrer"><div class="ph">${icon("video")}</div>
+    <span class="chip src"></span><span class="chip dur"></span>
+    <button class="x" title="Remove">${icon("x")}</button>
+    <div class="over"><div class="t-fetch">Reading link…</div><div class="t-dl"><span class="pct"></span><small></small></div>
+      <div class="okmark">${icon("check")}</div><div class="t-err">Failed</div><button class="retry">${icon("retry")}Retry</button></div>
+    <div class="bar"><i></i></div></div>
+    <div class="pick" title="Click to choose which items to download"></div>
+    <input class="nm" spellcheck="false" autocomplete="off"><div class="pv"></div>`;
+  const nm = el.querySelector(".nm"), img = el.querySelector("img");
+  img.onload = () => img.classList.add("ok");
+  img.onerror = () => { img.classList.remove("ok"); };
+  el.querySelector(".x").onclick = async () => { await api("/api/remove", { id: it.id }); el.remove(); cards.delete(it.id); poll(); };
+  el.querySelector(".retry").onclick = async () => { await api("/api/retry", { id: it.id }); poll(); };
+  const commit = async () => { if (nm.dataset.v !== nm.value) { nm.dataset.v = nm.value; await api("/api/rename", { id: it.id, name: nm.value }); poll(); } };
+  nm.addEventListener("blur", commit);
+  nm.addEventListener("keydown", e => { if (e.key === "Enter") nm.blur(); if (e.key === "Escape") { nm.value = nm.dataset.v; nm.blur(); } });
+  return el;
+}
+function patchCard(el, it) {
+  const q = s => el.querySelector(s);
+  el.className = "card st-" + it.status;
+  const nm = q(".nm"), img = q("img");
+  if (it.has_thumb && !img.dataset.src) { img.dataset.src = "1"; img.src = `/thumb?id=${it.id}&t=${TOKEN}`; }
+  q(".chip.src").textContent = it.source; q(".chip.dur").textContent = fmtDur(it.duration);
+  const locked = it.status === "downloading" || it.status === "done";
+  nm.disabled = locked;
+  if (document.activeElement !== nm && nm.value !== it.name) { nm.value = it.name; nm.dataset.v = it.name; }
+  if (nm.dataset.v === undefined) nm.dataset.v = it.name;
+  nm.placeholder = it.title || (it.status === "fetching" ? "Reading link…" : "File name");
+  nm.title = locked ? "Already started – can't rename" : "Click to rename";
+  q(".pct").textContent = Math.floor(it.progress) + "%";
+  q(".t-dl small").textContent = [it.speed, it.eta && "ETA " + it.eta].filter(Boolean).join(" · ");
+  q(".bar i").style.width = it.progress + "%";
+  const pk = q(".pick"), media = it.media || [], sel = it.sel || [];
+  const sig = media.join() + "|" + sel.join() + "|" + locked + "|" + it.linked_slide;
+  if (pk.dataset.sig !== sig) {
+    pk.dataset.sig = sig;
+    let page = Math.min(Number(pk.dataset.page || 0), Math.max(0, Math.ceil(media.length / 3) - 1));
+    const renderPicker = () => {
+      pk.dataset.page = page;
+      pk.replaceChildren();
+      if (it.linked_slide || media.length <= 1) return;
+      const last = Math.ceil(media.length / 3) - 1;
+      const arrow = (direction, label, disabled) => {
+        const button = document.createElement("button");
+        button.className = "nav"; button.disabled = disabled;
+        button.textContent = direction < 0 ? "‹" : "›";
+        button.setAttribute("aria-label", label);
+        button.onclick = () => { page += direction; renderPicker(); };
+        return button;
+      };
+      if (last > 0) pk.append(arrow(-1, "Previous slides", page === 0));
+      media.slice(page * 3, page * 3 + 3).forEach((k, offset) => {
+        const i = page * 3 + offset;
+        const b = document.createElement("button");
+        b.disabled = locked;
+        b.className = sel[i] === false ? "" : "on"; b.textContent = (k === "video" ? "▶ " : "▣ ") + (i + 1);
+        b.title = (k === "video" ? "Video " : "Photo ") + (i + 1);
+        b.setAttribute("aria-pressed", sel[i] !== false);
+        b.onclick = async () => { await api("/api/pick", { id: it.id, index: i }); poll(); };
+        pk.append(b);
+      });
+      if (last > 0) pk.append(arrow(1, "Next slides", page === last));
+    };
+    renderPicker();
+  }
+  q(".t-err").textContent = it.error ? it.error.slice(0, 80) : "Failed";
+  const pv = q(".pv");
+  pv.className = "pv" + (it.status === "error" ? " err" : "");
+  pv.textContent = it.status === "error" ? it.error : (it.status === "fetching" ? "" : it.final);
+  pv.title = it.status === "error" ? it.error : it.final + "\n" + it.url;
+}
+function renderItems(list) {
+  const grid = $("#grid"), seen = new Set();
+  list.forEach((it, i) => {
+    let el = cards.get(it.id); if (!el) { el = makeCard(it); cards.set(it.id, el); }
+    seen.add(it.id); patchCard(el, it);
+    if (grid.children[i] !== el) grid.insertBefore(el, grid.children[i] || null);
+  });
+  cards.forEach((el, id) => { if (!seen.has(id)) { el.remove(); cards.delete(id); } });
+  $("#empty").style.display = list.length ? "none" : "flex";
+  $("#count").textContent = list.length;
+}
+
+/* ---------- state ---------- */
+function apply(s) {
+  S = s;
+  if (first) {
+    first = false; lastRun = s.run.run_id; const st = s.settings;
+    $("#folder").value = st.folder; $("#fname").value = st.folder_name; zipOn = !!st.zip; farmersOn = !!st.farmers;
+    $("#igBrowser").value = st.instagram_browser || "";
+    hiresOn = !!st.hires; $("#quality").value = st.quality; $("#parallel").value = st.parallel; paintZip();
+  }
+  paintFarmers(); paintHires();
+  const yt = $("#chipYt"); yt.querySelector(".dot").className = "dot" + (s.ytdlp ? "" : " bad");
+  yt.querySelector("span:last-child").innerHTML = s.ytdlp ? `yt-dlp <b>${s.ytdlp_version || ""}</b>` : "yt-dlp missing";
+  yt.title = s.ytdlp ? "yt-dlp ready" : "Put yt-dlp.exe in the same folder as vbd.py";
+  const ff = $("#chipFf"); ff.querySelector(".dot").className = "dot" + (s.ffmpeg_ok ? "" : (s.ffmpeg ? " bad" : " warn"));
+  ff.querySelector("span:last-child").textContent = s.ffmpeg_ok ? "ffmpeg" : (s.ffmpeg ? "ffmpeg broken" : "ffmpeg off");
+  ff.title = s.ffmpeg_ok ? "ffmpeg ready – used when High-res is on" : (s.ffmpeg ? "ffmpeg.exe can't start (it needs its DLL files). Use a static build." : "Optional: only needed for High-res");
+
+  document.querySelectorAll("[data-session]").forEach(chip => {
+    const service = chip.dataset.session;
+    const connected = !!s.chrome_connected[service];
+    const name = { instagram: "Instagram", facebook: "Facebook", threads: "Threads" }[service];
+    chip.querySelector(".dot").classList.toggle("warn", !connected);
+    chip.title = name + (connected ? " session connected" : " session disconnected");
+    chip.setAttribute("aria-label", chip.title);
+  });
+
+  renderItems(s.items);
+  const r = s.run, items = s.items;
+  const pending = items.filter(i => i.status !== "done").length, done = items.filter(i => i.status === "done").length;
+  const errs = items.filter(i => i.status === "error").length, fetching = items.filter(i => i.status === "fetching").length;
+  busy = r.active || fetching > 0;
+  const go = $("#btnGo");
+  go.className = "btn " + (r.active ? "stop" : "mint");
+  go.innerHTML = r.active ? `${icon("stop")}<span>${r.cancelling ? "Stopping…" : "Stop"}</span>` : `${icon("download")}<span>Download</span>`;
+  go.disabled = !r.active && (!pending || !s.ytdlp);
+  $("#btnClear").disabled = r.active || !items.length;
+  ["#parallel", "#btnFolder", "#btnImport", "#folder", "#fname", "#zipOn", "#zipOff"].forEach(x => $(x).disabled = r.active);
+  let pct = 0, txt = "";
+  if (r.active) {
+    const part = items.filter(i => i.status === "downloading").reduce((a, i) => a + i.progress / 100, 0);
+    pct = r.total ? (r.finished + part) / r.total * 100 : 0;
+    txt = r.phase === "zipping" ? "<b>Zipping files…</b>" : `Downloading <b>${Math.min(r.finished + 1, r.total)}</b> of <b>${r.total}</b>`;
+  } else if (items.length) {
+    pct = done ? done / items.length * 100 : 0;
+    txt = `<span><b>${items.length}</b> in queue</span>` + (done ? `<span><b>${done}</b> done</span>` : "") + (errs ? `<span style="color:var(--red)"><b>${errs}</b> failed</span>` : "") + (fetching ? `<span>reading ${fetching}…</span>` : "");
+  }
+  $("#overall").style.width = pct + "%"; $("#sumtxt").innerHTML = txt;
+  if (!r.active && r.result && r.run_id !== lastRun) {
+    const x = r.result, where = x.zip ? "zip" : "folder";
+    toast(x.cancelled ? `Stopped – ${x.saved} saved` : `${x.saved} saved${x.failed ? `, ${x.failed} failed` : ""} – ${where} ready`, x.saved ? x.path : "");
+    lastRun = r.run_id;
+  }
+}
+async function poll() {
+  clearTimeout(timer);
+  try { apply(await api("/api/state")); $("#offline").classList.remove("show"); }
+  catch (e) { $("#offline").classList.add("show"); }
+  timer = setTimeout(poll, busy ? 600 : 1800);
+}
+window.addEventListener("pagehide",()=>{try{navigator.sendBeacon("/api/bye?t="+TOKEN)}catch(e){}});
+paintPreview(); poll();
+</script>
+</body>
+</html>
