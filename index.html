@@ -184,6 +184,8 @@ aside{display:flex;flex-direction:column;gap:14px;min-height:0}
 .nm:disabled{opacity:.9;cursor:default}
 .pick{display:flex;justify-content:center;align-items:center;gap:3px;min-height:0}
 .pick button{white-space:nowrap}
+.pick.x-media{flex-wrap:wrap}
+.pick.x-media button{white-space:normal}
 .pick .nav{padding-inline:4px}
 .add-well{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px}
 .add-well .stack{display:contents}
@@ -485,14 +487,16 @@ function patchCard(el, it) {
   q(".t-dl small").textContent = [it.speed, it.eta && "ETA " + it.eta].filter(Boolean).join(" · ");
   q(".bar i").style.width = it.progress + "%";
   const pk = q(".pick"), media = it.media || [], sel = it.sel || [];
-  const sig = media.join() + "|" + sel.join() + "|" + locked + "|" + it.linked_slide;
+  const labels = it.media_labels || [];
+  pk.classList.toggle("x-media", labels.length > 0);
+  const sig = labels.join() + "|" + media.join() + "|" + sel.join() + "|" + locked + "|" + it.linked_slide;
   if (pk.dataset.sig !== sig) {
     pk.dataset.sig = sig;
     let page = Math.min(Number(pk.dataset.page || 0), Math.max(0, Math.ceil(media.length / 3) - 1));
     const renderPicker = () => {
       pk.dataset.page = page;
       pk.replaceChildren();
-      if (it.linked_slide || media.length <= 1) return;
+      if (it.linked_slide || !media.length || (!labels.length && media.length === 1)) return;
       const last = Math.ceil(media.length / 3) - 1;
       const arrow = (direction, label, disabled) => {
         const button = document.createElement("button");
@@ -507,8 +511,9 @@ function patchCard(el, it) {
         const i = page * 3 + offset;
         const b = document.createElement("button");
         b.disabled = locked;
-        b.className = sel[i] === false ? "" : "on"; b.textContent = (k === "video" ? "▶ " : "▣ ") + (i + 1);
-        b.title = (k === "video" ? "Video " : "Photo ") + (i + 1);
+        b.className = sel[i] === false ? "" : "on";
+        b.textContent = labels[i] || (k === "video" ? "▶ " : "▣ ") + (i + 1);
+        b.title = labels[i] || (k === "video" ? "Video " : "Photo ") + (i + 1);
         b.setAttribute("aria-pressed", sel[i] !== false);
         b.onclick = async () => { await api("/api/pick", { id: it.id, index: i }); poll(); };
         pk.append(b);

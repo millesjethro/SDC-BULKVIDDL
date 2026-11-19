@@ -213,6 +213,8 @@ def get_slide(u):
 def add_item(url, name="", highlight_start=None, highlight_end=None):
     slide = get_slide(url.strip().strip("<>\"'"))
     url = norm_url(url)
+    if x_status_id(url):
+        slide = 0
     if ig_story_title(url) != "Instagram Highlight":
         highlight_start = highlight_end = None
     with LOCK:
@@ -240,9 +242,76 @@ def last_error(text):
     return msg[:220]
 
 
+def x_status_id(url):
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme not in ("http", "https") or parsed.hostname not in (
+            "x.com", "www.x.com", "mobile.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com"):
+        return None
+    match = re.fullmatch(r"/(?:[^/]+|i/web)/status/(\d+)/?", parsed.path)
+    return match.group(1) if match else None
+
+
+def x_post_media(post_id):
+    # X's public embed endpoint returns the parent and quote as separate objects.
+    endpoint = "https://cdn.syndication.twimg.com/tweet-result"
+    query = urllib.parse.urlencode({"id": post_id, "token": "0.123"})
+    req = urllib.request.Request(endpoint + "?" + query, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=20) as response:
+        post = json.load(response)
+    if post.get("id_str") != post_id:
+        raise RuntimeError("X did not return media for this post.")
+
+    media = []
+    for source, entry in (("Original post", post), ("Quoted post", post.get("quoted_tweet") or {})):
+        counts = {"video": 0, "animated_gif": 0}
+        for detail in entry.get("mediaDetails") or []:
+            kind = detail.get("type")
+            if kind not in counts:
+                continue
+            counts[kind] += 1
+            variants = []
+            for variant in (detail.get("video_info") or {}).get("variants", []):
+                url = variant.get("url") or ""
+                parsed = urllib.parse.urlsplit(url)
+                if (variant.get("content_type") == "video/mp4" and parsed.scheme == "https"
+                        and parsed.netloc == "video.twimg.com" and parsed.path.endswith(".mp4")):
+                    size = re.search(r"/(\d+)x(\d+)/", parsed.path)
+                    variants.append((int(variant.get("bitrate") or 0), int(size[2]) if size else 0, url))
+            if variants:
+                label = "GIF" if kind == "animated_gif" else "Video"
+                media.append(dict(kind=kind, label=f"{label} {counts[kind]} · {source}",
+                                  original=source == "Original post", variants=sorted(variants, reverse=True)))
+    if not media:
+        raise RuntimeError("X did not provide any downloadable videos or GIFs for this post.")
+    return post, media
+
+
+def fetch_x_meta(it, post_id):
+    try:
+        post, media = x_post_media(post_id)
+        with LOCK:
+            if it["status"] == "fetching":
+                choices = {m["label"]: on for m, on in zip(it.get("media", []), it.get("sel", []))}
+                created = post.get("created_at", "")
+                upload_date = created[:10].replace("-", "") if re.match(r"\d{4}-\d{2}-\d{2}", created) else ""
+                it.update(title=post.get("text") or "X post",
+                          uploader=(post.get("user") or {}).get("screen_name") or "",
+                          upload_date=upload_date, media=media,
+                          sel=[choices.get(m["label"], m["original"]) for m in media],
+                          status="ready", error="")
+    except Exception as e:
+        with LOCK:
+            if it["status"] == "fetching":
+                it.update(status="error", error=str(e)[:220] or "Could not read this X post.")
+
+
 def fetch_meta(iid):
     it = get_item(iid)
     if not it:
+        return
+    post_id = x_status_id(it["url"])
+    if post_id:
+        fetch_x_meta(it, post_id)
         return
     if is_threads(it["url"]):
         try:
@@ -325,7 +394,7 @@ def unique_base(outdir, base):
     return cand
 
 
-def build_cmd(yt, it, outdir, base, s, facebook_login=False):
+def build_cmd(yt, it, outdir, base, s, facebook_login=False, x_urls=None):
     ff = find_ffmpeg() if (s.get("hires") and FF["ok"]) else None
     q = s.get("quality", "best")
     h = {"1080": 1080, "720": 720, "480": 480, "360": 360}.get(q)
@@ -339,9 +408,11 @@ def build_cmd(yt, it, outdir, base, s, facebook_login=False):
     cf = ig_cookie_file(s) if (it.get("ig_auth") and "instagram" in it["url"].lower()) else None
     if cf:
         cmd += ["--cookies", cf]
-    elif not facebook_login and s.get("cookies_browser"):
+    elif not x_urls and not facebook_login and s.get("cookies_browser"):
         cmd += ["--cookies-from-browser", str(s["cookies_browser"])]
-    if ff:
+    if x_urls:
+        cmd += ["-f", "best"]
+    elif ff:
         cmd += ["-f", f"bv*{cap}+ba/b{cap}", "-S", "vcodec:h264,res,acodec:m4a",
                 "--merge-output-format", "mp4"]
         if os.path.dirname(ff):
@@ -364,8 +435,10 @@ def build_cmd(yt, it, outdir, base, s, facebook_login=False):
     # one linked slide -> plain "name.ext" (no index); whole post -> keep _N so items don't overwrite
     single = bool(it.get("slide"))
     idx = "" if single else "%(playlist_index&_{}|)s"
+    if x_urls:
+        idx = "_%(autonumber)d" if len(x_urls) > 1 else ""
     tmpl = os.path.join(outdir, base.replace("%", "%%") + idx + ".%(ext)s")
-    cmd += ["-o", tmpl, it["url"]]
+    cmd += ["-o", tmpl, *(x_urls or [it["url"]])]
     return cmd
 
 
@@ -1187,7 +1260,20 @@ def download_one(iid, outdir, run, s):
         yt = find_ytdlp()
         if not yt:
             raise RuntimeError("yt-dlp not found next to the app")
+        x_urls = None
         with LOCK:
+            if x_status_id(it["url"]):
+                if not it.get("media"):
+                    raise RuntimeError("Retry this X link to load the media picker before downloading.")
+                selected = [m for m, on in zip(it["media"], it["sel"]) if on]
+                if not selected:
+                    raise RuntimeError("Select a video or GIF from this X post.")
+                height = {"1080": 1080, "720": 720, "480": 480, "360": 360}.get(s.get("quality"))
+                x_urls = []
+                for media in selected:
+                    variants = media["variants"]
+                    eligible = [v for v in variants if not height or 0 < v[1] <= height]
+                    x_urls.append((eligible[0] if eligible else variants[-1])[2])
             base = unique_base(outdir, final_name(it))
             it.update(status="downloading", progress=0.0, speed="", eta="", error="", outfile="", count=0)
         if is_facebook_story(it["url"]):
@@ -1200,7 +1286,7 @@ def download_one(iid, outdir, run, s):
                     it.update(status="ready", progress=0.0)
             return
         session = facebook_session(it["url"])
-        cmd, payload = authenticated_ytdlp(build_cmd(yt, it, outdir, base, s, bool(session)), session)
+        cmd, payload = authenticated_ytdlp(build_cmd(yt, it, outdir, base, s, bool(session), x_urls), session)
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE if payload else None, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, creationflags=NOWIN)
         PROCS[iid] = proc
@@ -1237,7 +1323,7 @@ def download_one(iid, outdir, run, s):
             clean_partials(outdir, base)
             with LOCK:
                 it.update(status="ready", progress=0.0, speed="", eta="")
-        elif proc.returncode == 0:
+        elif proc.returncode == 0 and (not x_urls or it["count"] == len(x_urls)):
             with LOCK:
                 it.update(status="done", progress=100.0, speed="", eta="")
                 run["saved"] += 1
@@ -1256,7 +1342,7 @@ def download_one(iid, outdir, run, s):
                     it.update(status="done", progress=100.0, speed="", eta="")
                     run["saved"] += 1
             else:
-                raise RuntimeError(last_error(joined))
+                raise RuntimeError(last_error(joined) if joined else "Could not save the selected media.")
     except Exception as e:
         with LOCK:
             it.update(status="error", error=str(e)[:220], speed="", eta="")
@@ -1484,6 +1570,8 @@ def api_state(_=None):
             d["has_thumb"] = bool(it["thumb"])
             d["linked_slide"] = bool(it.get("slide"))
             d["media"] = [m if isinstance(m, str) else m["kind"] for m in it.get("media", [])]
+            if x_status_id(it["url"]):
+                d["media_labels"] = [m["label"] for m in it.get("media", [])]
             d["sel"] = list(it.get("sel", []))
             items.append(d)
         run = {k: RUN[k] for k in ("active", "phase", "total", "finished", "saved", "failed",
@@ -1539,14 +1627,14 @@ def api_rename(b):
 
 
 def api_pick(b):
-    """toggle one item of a multi-media Threads post on/off"""
+    """Toggle one media item in the queue picker."""
     it = get_item(b.get("id"))
     try:
         i = int(b.get("index"))
     except (TypeError, ValueError):
         return {"ok": False}
-    if it and not it.get("slide") and it["status"] not in ("downloading", "done") and 0 <= i < len(it.get("sel", [])):
-        with LOCK:
+    with LOCK:
+        if it and not it.get("slide") and it["status"] not in ("fetching", "downloading", "done") and 0 <= i < len(it.get("sel", [])):
             it["sel"][i] = not it["sel"][i]
     return {"ok": True}
 
