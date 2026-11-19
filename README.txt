@@ -83,3 +83,8 @@ Experimental Facebook Story videos
   Facebook /stories/ link. This fallback looks for a direct MP4 in
   the signed-in Story page and saves one video. It does not enumerate
   Highlights or save photo Stories.
+
+X / Twitter posts
+- Paste a public post's regular share link. Use the buttons on the queue card
+  to choose the videos and GIFs to save. Original-post media starts selected,
+  and quoted-post media can be selected separately. GIFs save as looping MP4s.
