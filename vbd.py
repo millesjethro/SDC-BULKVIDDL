@@ -81,6 +81,7 @@ SETTINGS = {
     "folder_name": default_folder_name(),
     "zip": True,
     "farmers": False,
+    "date_format": "mdy",
     "quality": "best",
     "parallel": 2,
     "hires": False,
@@ -101,6 +102,8 @@ def load_settings():
                 SETTINGS[k] = d[k]
     except Exception:
         pass
+    if not isinstance(SETTINGS["date_format"], str) or SETTINGS["date_format"] not in DATE_FORMATS:
+        SETTINGS["date_format"] = "mdy"
     if str(SETTINGS.get("folder_name", "")).startswith("SocialMediaBackup_"):
         SETTINGS["folder_name"] = default_folder_name()
 
@@ -158,24 +161,43 @@ def today_str():
     return dt.date.today().strftime("%m-%d-%Y")
 
 
-def fmt_upload(yyyymmdd):
-    try:
-        return dt.datetime.strptime(yyyymmdd, "%Y%m%d").strftime("%m-%d-%Y")
-    except Exception:
+DATE_FORMATS = {"long": None, "iso": "%Y-%m-%d", "mdy": "%m-%d-%Y"}
+MONTH_NAMES = ("January", "February", "March", "April", "May", "June",
+               "July", "August", "September", "October", "November", "December")
+
+
+def format_posted_date(value, date_format):
+    if isinstance(value, str):
+        try:
+            if re.fullmatch(r"\d{8}", value):
+                value = dt.datetime.strptime(value, "%Y%m%d").date()
+            else:
+                value = dt.date.fromisoformat(value)
+        except ValueError:
+            return ""
+    if not isinstance(value, dt.date):
         return ""
+    if date_format == "long":
+        return f"{MONTH_NAMES[value.month - 1]} {value.day}, {value.year}"
+    return value.strftime(DATE_FORMATS.get(date_format, DATE_FORMATS["mdy"]))
 
 
-def final_name(it):
-    name = (it["name"] or "").strip()
-    if SETTINGS["farmers"]:
-        if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", name):
-            try:
-                name = dt.date.fromisoformat(name).strftime("%m-%d-%Y")
-            except ValueError:
-                pass
-        posted = name or fmt_upload(it["upload_date"]) or "unknown date"
-        return sanitize(f'{it["source"]} video captured {today_str()}, and posted {posted}')
-    return sanitize(name) or sanitize(it["title"]) or ("video_" + it["id"])
+def final_name(it, settings=None, media_index=None):
+    settings = SETTINGS if settings is None else settings
+    date_format = settings["date_format"]
+    name = sanitize(it["name"])
+    posted_date = it["upload_date"]
+    if it.get("ig_story_dates"):
+        if media_index is None:
+            media_index = next((i for i, on in enumerate(it["sel"]) if on), 0)
+        posted_date = it["ig_story_dates"][media_index]
+    posted = format_posted_date(posted_date, date_format) or "UNKNOWN"
+    if settings["farmers"]:
+        if name and re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", name):
+            name = format_posted_date(name, date_format) or name
+        captured = format_posted_date(dt.date.today(), date_format)
+        return sanitize(f'{it["source"]} video captured {captured}, and posted {name or posted}')
+    return name or posted
 
 
 # --------------------------------------------------------------------------
@@ -320,6 +342,7 @@ def fetch_meta(iid):
             with LOCK:
                 if get_item(iid) and it["status"] == "fetching":
                     it.update(title="Threads - @" + info["author"], uploader="@" + info["author"],
+                              upload_date=info["upload_date"],
                               thumb=next((m["thumb"] for m in med if m["thumb"]), ""),
                               media=med, sel=[True] * len(med), status="ready", error="")
         except Exception as e:
@@ -346,9 +369,10 @@ def fetch_meta(iid):
             with LOCK:
                 if get_item(iid) and it["status"] == "fetching":
                     choices = dict(zip(it.get("ig_story_ids", ()), it.get("sel", ())))
-                    it.update(title=story_title, media=[kind for _, kind in media],
-                              ig_story_ids=[mid for mid, _ in media],
-                              sel=[choices.get(mid, True) for mid, _ in media], status="ready", error="")
+                    it.update(title=story_title, media=[kind for _, kind, _ in media],
+                              ig_story_ids=[mid for mid, _, _ in media],
+                              ig_story_dates=[date for _, _, date in media],
+                              sel=[choices.get(mid, True) for mid, _, _ in media], status="ready", error="")
         except Exception as e:
             with LOCK:
                 if get_item(iid) and it["status"] == "fetching":
@@ -791,7 +815,8 @@ def threads_info(url, s):
         if not TH_STATE["live"]:
             raise RuntimeError("Threads needs your login. Sign in to Threads, then use Connect Chrome and select Threads.")
         raise RuntimeError("No media found on this Threads post (private, deleted, or login expired)")
-    return dict(author=a.group(1) if a else "threads", media=media)
+    return dict(author=a.group(1) if a else "threads", media=media,
+                upload_date=date_from_timestamp((post or {}).get("taken_at")))
 
 
 def threads_download(it, outdir, base, s, run):
@@ -812,7 +837,7 @@ def threads_download(it, outdir, base, s, run):
             if run["cancel"].is_set():
                 raise InterruptedError
             with LOCK:
-                name = base if n == 1 else unique_base(outdir, final_name(it))
+                name = base if n == 1 else unique_base(outdir, final_name(it, s))
             dest = os.path.join(outdir, name + "." + m["ext"])
             try:
                 r = _th_file(m["url"])
@@ -848,8 +873,8 @@ def threads_download(it, outdir, base, s, run):
 # --------------------------------------------------------------------------
 IG_AUTH_ERR = (r"isn't available to everyone|can't be seen by certain|login required|log in|logged in|"
                r"rate-limit|Requested content is not available|empty media response|restricted|private")
-IG_LOGIN_HINT = ("Open Instagram in a regular Firefox window, sign in, select Firefox under Instagram login "
-                 "in the queue, and retry. Chrome on Windows can block apps from reading its session.")
+IG_LOGIN_HINT = ("Sign in to Instagram in Chrome, use Connect Chrome to send your session, "
+                 "then retry the link.")
 
 
 def ig_browser(settings):
@@ -947,11 +972,21 @@ def ig_gallery_items(url, cf, options=(), session=None):
     return items
 
 
-def ig_enumerate(url, cf):
+def date_from_timestamp(value):
     try:
-        return [kind for _, kind, _ in ig_gallery_items(url, cf)] or None
-    except Exception:
+        return dt.datetime.fromtimestamp(float(value), dt.timezone.utc).date()
+    except (TypeError, ValueError, OverflowError, OSError):
         return None
+
+
+def ig_enumerate(url, cf, session=None):
+    try:
+        items = ig_gallery_items(url, cf, session=session)
+    except Exception:
+        return None, None
+    posted = next((date for _, _, timestamp in items
+                   if (date := instagram_posted_date(timestamp)) is not None), None)
+    return [kind for _, kind, _ in items] or None, posted
 
 
 def instagram_posted_date(value):
@@ -974,22 +1009,24 @@ def ig_story_media(url, settings, highlight_start=None, highlight_end=None):
         if ig_browser(settings) == "firefox":
             raise RuntimeError("No active Instagram session found in Firefox. Open the link in a regular Firefox tab "
                                "and confirm it plays, then retry here.")
-        raise RuntimeError("Use Connect Chrome in the queue to send your Instagram session, or select Firefox.")
+        raise RuntimeError("Use Connect Chrome to send your Instagram session, then retry.")
     items = []
     start = highlight_start or dt.date.min
     end = highlight_end or dt.date.today()
     filtered = highlight_start is not None or highlight_end is not None
+    highlight = ig_story_title(url) == "Instagram Highlight"
     for mid, kind, timestamp in ig_gallery_items(url, cookies, IG_STORY_OPTIONS, session):
-        if not re.fullmatch(r"[0-9]+", mid):
+        if not re.fullmatch(r"[0-9]+", mid) or (highlight and kind != "video"):
             continue
-        if filtered:
-            posted = instagram_posted_date(timestamp)
-            if posted is None or not start <= posted <= end:
-                continue
-        items.append((mid, kind))
+        posted = instagram_posted_date(timestamp)
+        if filtered and (posted is None or not start <= posted <= end):
+            continue
+        items.append((mid, kind, posted))
     if not items and filtered:
-        raise RuntimeError("No Highlight items with a known posting date in the selected range.")
+        raise RuntimeError("No Highlight videos with a known posting date in the selected range.")
     if not items:
+        if highlight:
+            raise RuntimeError("No videos found in this Highlight.")
         raise RuntimeError("No story media found. The story may have expired or may be unavailable to this account.")
     return items
 
@@ -998,10 +1035,10 @@ def ig_download(it, outdir, base, s, run):
     """Download the picked items of an Instagram post, one gallery-dl call per item. -1 = cancelled."""
     story_ids = it.get("ig_story_ids")
     with LOCK:
-        session = CHROME_LINK["sessions"].get("instagram") if story_ids else None
+        session = CHROME_LINK["sessions"].get("instagram")
     cf = None if session else ig_cookie_file(s)
     if story_ids and not cf and not session:
-        raise RuntimeError("Instagram login is unavailable. Connect Chrome or sign in with Firefox, then retry.")
+        raise RuntimeError("Instagram login is unavailable. Use Connect Chrome to send your Instagram session, then retry.")
     sel = it.get("sel") or []
     todo = [i for i in range(len(it.get("media") or [])) if i >= len(sel) or sel[i]]
     if not todo:
@@ -1012,7 +1049,7 @@ def ig_download(it, outdir, base, s, run):
             if run["cancel"].is_set():
                 raise InterruptedError
             with LOCK:
-                name = base if n == 1 else unique_base(outdir, final_name(it))
+                name = base if n == 1 else unique_base(outdir, final_name(it, s, i))
             names.append(name)
             fmt = name.replace("{", "{{").replace("}", "}}") + ".{extension}"
             options = ["-D", outdir, "-f", fmt, "--no-part"]
@@ -1177,10 +1214,12 @@ def fetch_meta_generic(iid, it, yt):
                 d, err, used_login = _yt_meta(yt, it["url"], cf), "", True
             except Exception as e:
                 err = str(e)
-    media = None
+    media, gallery_date, gallery_session = None, None, None
     if is_ig and re.search(r"/(p|reel|reels|tv)/", it["url"]):
-        cf2 = cf or ig_cookie_file(SETTINGS)
-        media = ig_enumerate(it["url"], cf2)
+        with LOCK:
+            gallery_session = CHROME_LINK["sessions"].get("instagram")
+        cf2 = None if gallery_session else (cf or ig_cookie_file(SETTINGS))
+        media, gallery_date = ig_enumerate(it["url"], cf2, gallery_session)
     with LOCK:
         if not get_item(iid) or it["status"] != "fetching":
             return
@@ -1190,7 +1229,7 @@ def fetch_meta_generic(iid, it, yt):
         if media and slide > len(media):
             it.update(status="error", error="The linked Instagram slide is unavailable.")
             return
-        if media and (slide or len(media) > 1):
+        if media and (slide or len(media) > 1 or (gallery_session and d is None)):
             it.update(media=media, sel=[not slide or i == slide - 1 for i in range(len(media))])
         if d is not None:
             thumb = d.get("thumbnail") or ""
@@ -1198,10 +1237,11 @@ def fetch_meta_generic(iid, it, yt):
                 thumb = (d["thumbnails"][-1] or {}).get("url", "")
             it.update(title=d.get("title") or "", thumb=thumb, duration=int(d.get("duration") or 0),
                       uploader=d.get("uploader") or d.get("channel") or "",
-                      upload_date=d.get("upload_date") or "", status="ready", error="")
+                      upload_date=d.get("upload_date") or date_from_timestamp(d.get("timestamp")) or gallery_date,
+                      status="ready", error="")
         elif media or (is_ig and needs_fallback(it["url"], err)):
             # yt-dlp can't read it (photo / needs login) but gallery-dl can: the download step handles it
-            it.update(status="ready", error="", title=it.get("title") or "Instagram post",
+            it.update(status="ready", error="", upload_date=gallery_date, title=it.get("title") or "Instagram post",
                       uploader=it.get("uploader") or "Instagram")
         elif is_ig and re.search(IG_AUTH_ERR, err, re.I):
             it.update(status="error", error=(IG_LOGIN_HINT if cf is None else err)[:220])
@@ -1235,7 +1275,7 @@ def download_one(iid, outdir, run, s):
             return
         if is_threads(it["url"]):
             with LOCK:
-                base = unique_base(outdir, final_name(it))
+                base = unique_base(outdir, final_name(it, s))
                 it.update(status="downloading", progress=0.0, speed="", eta="", error="", outfile="", count=0)
             if threads_download(it, outdir, base, s, run) < 0:
                 with LOCK:
@@ -1247,7 +1287,7 @@ def download_one(iid, outdir, run, s):
             return
         if it.get("media") and "instagram" in it["url"].lower():
             with LOCK:
-                base = unique_base(outdir, final_name(it))
+                base = unique_base(outdir, final_name(it, s))
                 it.update(status="downloading", progress=0.0, speed="", eta="", error="", outfile="", count=0)
             if ig_download(it, outdir, base, s, run) < 0:
                 with LOCK:
@@ -1274,7 +1314,7 @@ def download_one(iid, outdir, run, s):
                     variants = media["variants"]
                     eligible = [v for v in variants if not height or 0 < v[1] <= height]
                     x_urls.append((eligible[0] if eligible else variants[-1])[2])
-            base = unique_base(outdir, final_name(it))
+            base = unique_base(outdir, final_name(it, s))
             it.update(status="downloading", progress=0.0, speed="", eta="", error="", outfile="", count=0)
         if is_facebook_story(it["url"]):
             output = download_facebook_story(it, outdir, base, run, s)
@@ -1672,6 +1712,8 @@ def api_retry(b):
 def api_settings(b):
     with LOCK:
         updated = {key: b.get(key, value) for key, value in SETTINGS.items()}
+        if not isinstance(updated["date_format"], str) or updated["date_format"] not in DATE_FORMATS:
+            return {"ok": False, "error": "Unknown posted date format."}
         if updated["instagram_browser"] not in ("", "firefox", "chrome", "edge", "brave"):
             return {"ok": False, "error": "Unknown Instagram browser."}
         if updated != SETTINGS:
