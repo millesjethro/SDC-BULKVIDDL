@@ -1014,16 +1014,19 @@ def ig_story_media(url, settings, highlight_start=None, highlight_end=None):
     start = highlight_start or dt.date.min
     end = highlight_end or dt.date.today()
     filtered = highlight_start is not None or highlight_end is not None
+    highlight = ig_story_title(url) == "Instagram Highlight"
     for mid, kind, timestamp in ig_gallery_items(url, cookies, IG_STORY_OPTIONS, session):
-        if not re.fullmatch(r"[0-9]+", mid):
+        if not re.fullmatch(r"[0-9]+", mid) or (highlight and kind != "video"):
             continue
         posted = instagram_posted_date(timestamp)
         if filtered and (posted is None or not start <= posted <= end):
             continue
         items.append((mid, kind, posted))
     if not items and filtered:
-        raise RuntimeError("No Highlight items with a known posting date in the selected range.")
+        raise RuntimeError("No Highlight videos with a known posting date in the selected range.")
     if not items:
+        if highlight:
+            raise RuntimeError("No videos found in this Highlight.")
         raise RuntimeError("No story media found. The story may have expired or may be unavailable to this account.")
     return items
 

@@ -49,7 +49,7 @@ Instagram Stories and Highlights
 - Paste a Stories link (/stories/username/ or /stories/username/story_id/),
   a Highlight link (/stories/highlights/id/), or a shared Highlight link (/s/...).
   A link to an individual story opens just that item. For collections, click the
-  photo and video buttons in the queue to choose what to save.
+  media buttons in the queue to choose what to save. Highlights show videos only.
 - If the app asks for a login, sign in to Instagram in Chrome, connect the
   companion, and retry the item.
   Your account must already be able to view the story or highlight. Expired
@@ -76,7 +76,7 @@ Connect Threads or Facebook
 Instagram Highlight date filter
 - Set Highlights and To before adding or importing a Highlight link. Both
   dates are inclusive and use your Windows time zone. To and the file name
-  default to today. Leave Highlights blank and To at today for all slides.
+  default to today. Leave Highlights blank and To at today for all videos in the date range.
   Remove and re-add a queued link to change its date range.
 
 Experimental Facebook Story videos
