@@ -1,0 +1,22 @@
+name: Package Windows Preview 4
+on:
+  push:
+    branches: [windows-preview-4-package]
+permissions:
+  contents: write
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Rebuild and attach Windows ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mkdir -p /tmp/sdc-preview4/{base,asset}
+          gh release download facebook-story-preview-3 --pattern SDC-BULKVIDDL-Windows-x64.zip --dir /tmp/sdc-preview4/base
+          python .github/package-preview.py
+          gh release upload windows-preview-4 /tmp/sdc-preview4/asset/SDC-BULKVIDDL-Windows-x64.zip
