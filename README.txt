@@ -8,13 +8,15 @@ VIDEO BULK DOWNLOADER
    your desktop, create a shortcut to the EXE.
 
 Use
-- URL + File name -> "+". File name = part of name, or the posted date for Farmers naming.
+- Paste a URL and click +. Choose the date format for automatic file names:
+  January 16, 2001, 2001-01-16, or 01-16-2001. If the posted date is unavailable,
+  the app uses UNKNOWN.
 - Click any file name in the queue to rename it before downloading.
 - Folder name field (next to ZIP / NOT ZIP) = the .zip name, or the sub-folder name.
 - Excel/CSV: column A = urls, column B = file name (first row may be a header).
-- FARMERS FILE NAMING ON:  {Social Media} video captured {today MM-DD-YYYY}, and posted {file name}
+- FARMERS FILE NAMING ON:  {Social Media} video captured {today}, and posted {posted date or custom name}
   e.g. YouTube video captured 10-20-2025, and posted 09-01-2024
-  (if file name is empty it uses the video's real upload date)
+  Both automatic dates use the selected format.
 - Blue button = update yt-dlp. Close the window with its X to quit.
 
 Instagram photos / carousels
@@ -48,9 +50,8 @@ Instagram Stories and Highlights
   a Highlight link (/stories/highlights/id/), or a shared Highlight link (/s/...).
   A link to an individual story opens just that item. For collections, click the
   photo and video buttons in the queue to choose what to save.
-- On Windows, if Chrome is signed in and the app still asks for a login, open
-  Instagram in a regular Firefox window and sign in there. Select Firefox in
-  the queue's Instagram login menu, then retry the item.
+- If the app asks for a login, sign in to Instagram in Chrome, connect the
+  companion, and retry the item.
   Your account must already be able to view the story or highlight. Expired
   stories may no longer be available.
 

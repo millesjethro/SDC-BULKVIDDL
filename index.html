@@ -91,7 +91,16 @@ aside{display:flex;flex-direction:column;gap:14px;min-height:0}
 .seg button{position:relative;z-index:1;font-size:11.5px;font-weight:800;letter-spacing:.08em;color:var(--mute);transition:color .2s}
 .seg button.on{color:var(--mint-ink)}
 
-/* farmers */
+/* naming */
+.date-formats{border:0;padding:0;margin:0;min-width:0}
+.date-formats legend{padding:0 0 7px;color:var(--mute);font-size:11.5px;font-weight:700}
+.date-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:4px;border-radius:14px;background:rgba(255,255,255,.06)}
+.date-options label{position:relative;cursor:pointer}
+.date-options input{position:absolute;inline-size:1px;block-size:1px;opacity:0}
+.date-options span{display:grid;place-items:center;min-height:36px;padding:4px;text-align:center;border-radius:10px;font-size:11px;font-weight:700;color:var(--mute)}
+.date-options input:checked + span{background:var(--mint);color:var(--mint-ink)}
+.date-options input:focus-visible + span{outline:2px solid var(--ink);outline-offset:2px}
+
 .farm{display:flex;align-items:center;gap:12px;cursor:pointer;user-select:none;padding:0}
 .sw{position:relative;width:46px;height:26px;border-radius:99px;background:rgba(255,255,255,.14);flex:none;transition:background .2s}
 .sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.4);transition:transform .22s cubic-bezier(.3,.9,.3,1)}
@@ -255,7 +264,6 @@ aside{display:flex;flex-direction:column;gap:14px;min-height:0}
               <label class="field" title="First posting date to include"><span>Highlights</span><input type="date" id="highlightStart"></label>
               <label class="field" title="Last posting date to include"><span>To:</span><input type="date" id="highlightEnd"></label>
             </div>
-            <label class="field"><svg class="i"><use href="#i-pen"/></svg><input id="nm" placeholder="File name / part of name" autocomplete="off" spellcheck="false"></label>
           </div>
           <button class="btn mint round" id="btnAdd" title="Add to queue"><svg class="i"><use href="#i-plus"/></svg></button>
         </div>
@@ -276,6 +284,14 @@ aside{display:flex;flex-direction:column;gap:14px;min-height:0}
         </div>
 
         <div class="well col">
+          <fieldset class="date-formats">
+            <legend>File name date format</legend>
+            <div class="date-options">
+              <label><input type="radio" name="dateFormat" value="long"><span>January 16, 2001</span></label>
+              <label><input type="radio" name="dateFormat" value="iso"><span>2001-01-16</span></label>
+              <label><input type="radio" name="dateFormat" value="mdy" checked><span>01-16-2001</span></label>
+            </div>
+          </fieldset>
           <div class="farm" id="farm" role="switch" aria-checked="false" tabindex="0"><span class="sw"></span><span class="t">FARMERS FILE NAMING</span></div>
           <div class="preview" id="preview"></div>
         </div>
@@ -298,11 +314,6 @@ aside{display:flex;flex-direction:column;gap:14px;min-height:0}
         <h2>Queue</h2><span class="count" id="count">0</span>
         <div class="grow"></div>
         <div class="sel hr" id="hires" role="switch" aria-checked="false" tabindex="0" title="Merges best video + audio with ffmpeg (1080p and above). Off = faster, ready-made MP4 only."><span>High-res</span><span class="sw mini"></span></div>
-        <label class="sel">Instagram login
-          <select id="igBrowser">
-            <option value="">Default browser setting</option><option value="firefox">Firefox</option>
-            <option value="chrome">Chrome</option><option value="edge">Edge</option><option value="brave">Brave</option>
-          </select></label>
         <label class="sel">Quality
           <select id="quality"><option value="best">Best</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option><option value="360">360p</option></select></label>
         <label class="sel">Parallel
@@ -353,7 +364,7 @@ $("#connectChrome").onclick = async () => {
 /* ---------- settings ---------- */
 function settingsBody() {
   return { folder: $("#folder").value.trim(), folder_name: $("#fname").value.trim(), zip: zipOn, farmers: farmersOn,
-           instagram_browser: $("#igBrowser").value, quality: $("#quality").value, hires: hiresOn, parallel: +$("#parallel").value };
+           date_format: $('input[name="dateFormat"]:checked').value, quality: $("#quality").value, hires: hiresOn, parallel: +$("#parallel").value };
 }
 function pushSettings(now) {
   clearTimeout(pushT);
@@ -370,10 +381,14 @@ function paintFarmers() {
   paintPreview();
 }
 function paintPreview() {
-  const el = $("#preview"), today = (S && S.today) || "MM-DD-YYYY";
+  const el = $("#preview"), format = $('input[name="dateFormat"]:checked').value;
+  const posted = {long: "January 16, 2001", iso: "2001-01-16", mdy: "01-16-2001"}[format];
+  const today = format === "long"
+    ? new Date().toLocaleDateString("en-US", {month: "long", day: "numeric", year: "numeric"})
+    : format === "iso" ? localDate() : ((S && S.today) || "MM-DD-YYYY");
   el.innerHTML = farmersOn
-    ? `<b>{Social Media}</b> video captured <b>${today}</b>, and posted <b>{File name}</b>`
-    : `Files are saved using the name you type (or the video title).`;
+    ? `<b>{Social Media}</b> video captured <b>${today}</b>, and posted <b>${posted}</b>`
+    : `Example file name <b>${posted}</b>`;
 }
 $("#zipOn").onclick = () => { zipOn = true; paintZip(); pushSettings(true); };
 $("#zipOff").onclick = () => { zipOn = false; paintZip(); pushSettings(true); };
@@ -385,7 +400,11 @@ const toggleHires = () => { hiresOn = !hiresOn; paintHires(); pushSettings(true)
   if (hiresOn && S && !S.ffmpeg_ok) toast(S.ffmpeg ? "ffmpeg.exe found but it won't start (missing DLLs) – use a static build" : "Put ffmpeg.exe next to vbd.py for high-res"); };
 function paintHires() { $("#hires").classList.toggle("on", hiresOn); $("#hires").setAttribute("aria-checked", hiresOn); }
 $("#hires").onclick = toggleHires; $("#hires").onkeydown = e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleHires(); } };
-["#igBrowser", "#quality", "#parallel"].forEach(s => $(s).addEventListener("change", () => pushSettings(true)));
+["#quality", "#parallel"].forEach(s => $(s).addEventListener("change", () => pushSettings(true)));
+
+document.querySelectorAll('input[name="dateFormat"]').forEach(input => {
+  input.onchange = () => { paintPreview(); pushSettings(true); };
+});
 
 $("#btnFolder").onclick = async () => {
   const r = await api("/api/browse-folder", {});
@@ -393,10 +412,10 @@ $("#btnFolder").onclick = async () => {
 };
 
 /* ---------- adding ---------- */
-async function addLinks(text, name) {
+async function addLinks(text) {
   text = (text || "").trim();
   if (!text) { const f = $("#url").closest(".field"); f.classList.remove("shake"); void f.offsetWidth; f.classList.add("shake"); $("#url").focus(); return; }
-  const r = await api("/api/add", { url: text, name: name || "", highlight_start: $("#highlightStart").value, highlight_end: $("#highlightEnd").value });
+  const r = await api("/api/add", { url: text, highlight_start: $("#highlightStart").value, highlight_end: $("#highlightEnd").value });
   toast(r.msg); if (r.ok) poll();
   return r.ok;
 }
@@ -406,14 +425,13 @@ function localDate() {
     .map(n => String(n).padStart(2, "0")).join("-");
 }
 $("#highlightEnd").value = localDate();
-$("#nm").value = localDate();
 
 async function addFromForm() {
-  if (await addLinks($("#url").value, $("#nm").value)) { $("#url").value = ""; $("#nm").value = localDate(); }
+  if (await addLinks($("#url").value)) $("#url").value = "";
   $("#url").focus();
 }
 $("#btnAdd").onclick = addFromForm;
-["#url", "#nm", "#highlightStart", "#highlightEnd"].forEach(s => $(s).addEventListener("keydown", e => { if (e.key === "Enter") addFromForm(); }));
+["#url", "#highlightStart", "#highlightEnd"].forEach(s => $(s).addEventListener("keydown", e => { if (e.key === "Enter") addFromForm(); }));
 
 $("#xlPick").onclick = async () => {
   const r = await api("/api/browse-excel", {});
@@ -460,7 +478,7 @@ function makeCard(it) {
       <div class="okmark">${icon("check")}</div><div class="t-err">Failed</div><button class="retry">${icon("retry")}Retry</button></div>
     <div class="bar"><i></i></div></div>
     <div class="pick" title="Click to choose which items to download"></div>
-    <input class="nm" spellcheck="false" autocomplete="off"><div class="pv"></div>`;
+    <input class="nm" aria-label="Rename this item" spellcheck="false" autocomplete="off"><div class="pv"></div>`;
   const nm = el.querySelector(".nm"), img = el.querySelector("img");
   img.onload = () => img.classList.add("ok");
   img.onerror = () => { img.classList.remove("ok"); };
@@ -546,7 +564,8 @@ function apply(s) {
   if (first) {
     first = false; lastRun = s.run.run_id; const st = s.settings;
     $("#folder").value = st.folder; $("#fname").value = st.folder_name; zipOn = !!st.zip; farmersOn = !!st.farmers;
-    $("#igBrowser").value = st.instagram_browser || "";
+    const format = [...document.querySelectorAll('input[name="dateFormat"]')].find(input => input.value === st.date_format);
+    if (format) format.checked = true;
     hiresOn = !!st.hires; $("#quality").value = st.quality; $("#parallel").value = st.parallel; paintZip();
   }
   paintFarmers(); paintHires();
