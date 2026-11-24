@@ -1,7 +1,7 @@
-name: Package Windows Preview 4
+name: Package Windows Preview 5
 on:
   push:
-    branches: [windows-preview-4-package]
+    branches: [windows-preview-5-package]
 permissions:
   contents: write
 jobs:
@@ -16,7 +16,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          mkdir -p /tmp/sdc-preview4/{base,asset}
-          gh release download facebook-story-preview-3 --pattern SDC-BULKVIDDL-Windows-x64.zip --dir /tmp/sdc-preview4/base
+          mkdir -p /tmp/sdc-preview5/{base,asset}
+          gh release download windows-preview-4 --pattern SDC-BULKVIDDL-Windows-x64.zip --dir /tmp/sdc-preview5/base
           python .github/package-preview.py
-          gh release upload windows-preview-4 /tmp/sdc-preview4/asset/SDC-BULKVIDDL-Windows-x64.zip
+          gh release upload windows-preview-5 /tmp/sdc-preview5/asset/SDC-BULKVIDDL-Windows-x64.zip

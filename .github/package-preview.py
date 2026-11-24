@@ -4,10 +4,10 @@ import shutil
 import subprocess
 from zipfile import ZipFile
 
-root = Path('/tmp/sdc-preview4')
+root = Path('/tmp/sdc-preview5')
 name = 'SDC-BULKVIDDL-Windows-x64.zip'
 repo = '.'
-rev = 'e1b7cc1c1aa618de64989d22e7e273af93fbe991'
+rev = 'b2f978a381d2948ae521c219323c043d0c918a93'
 def from_commit(path):
     return subprocess.check_output(['git', '-C', repo, 'show', f'{rev}:{path}'])
 
@@ -18,16 +18,21 @@ with ZipFile(root/'base'/name) as old, ZipFile(root/'asset'/name, 'w') as new:
     prefix = launcher[:-len('Video Bulk Downloader.exe')]
     replacements = {prefix + n: from_commit(n) for n in changed}
     assert replacements.keys() <= set(names)
+    template = prefix + 'Queue Template.xlsx'
+    template_data = from_commit('Queue Template.xlsx')
+    assert template not in names
     for entry in old.infolist():
         if entry.filename in replacements:
             new.writestr(entry, replacements[entry.filename])
         else:
             with old.open(entry) as src, new.open(entry, 'w') as dst:
                 shutil.copyfileobj(src, dst)
+    new.writestr(template, template_data)
 
 with ZipFile(root/'base'/name) as old, ZipFile(root/'asset'/name) as new:
     assert new.testzip() is None
-    assert old.namelist() == new.namelist()
+    assert new.namelist() == old.namelist() + [template]
+    assert new.read(template) == template_data
     for key, data in replacements.items():
         assert new.read(key) == data
     for entry in old.infolist():
