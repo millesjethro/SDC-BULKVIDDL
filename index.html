@@ -197,7 +197,11 @@ aside{display:flex;flex-direction:column;gap:14px;min-height:0}
 .pick.x-media{flex-wrap:wrap}
 .pick.x-media button{white-space:normal}
 .pick .nav{padding-inline:4px}
-.add-well{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px}
+.add-well{display:grid;grid-template-columns:minmax(0,1fr);gap:9px}
+.add-well #btnAdd{justify-self:center}
+.excel-controls{display:flex;align-items:center;gap:10px;min-width:0}
+.excel-template{align-self:flex-start;padding:4px 0;color:var(--mint);font:inherit;font-size:12px;text-align:left}
+.excel-template:hover{text-decoration:underline}
 .add-well .stack{display:contents}
 .add-well .link-field,.highlight-dates{grid-column:1/-1}
 .highlight-dates{display:grid;grid-template-columns:1.2fr 1fr;gap:5px}
@@ -266,7 +270,7 @@ aside{display:flex;flex-direction:column;gap:14px;min-height:0}
               <label class="field" title="Last posting date to include"><span>To:</span><input type="date" id="highlightEnd"></label>
             </div>
           </div>
-          <button class="btn mint round" id="btnAdd" title="Add to queue"><svg class="i"><use href="#i-plus"/></svg></button>
+          <button class="btn mint" id="btnAdd"><svg class="i"><use href="#i-plus"/></svg>Add to queue</button>
         </div>
 
         <div class="well">
@@ -279,9 +283,12 @@ aside{display:flex;flex-direction:column;gap:14px;min-height:0}
           <div class="seg" id="seg"><i></i><button id="zipOn" class="on">ZIP</button><button id="zipOff">NOT ZIP</button></div>
         </div>
 
-        <div class="well">
-          <div class="field click" id="xlPick" title="Column A = urls, Column B = file name"><svg class="i"><use href="#i-table"/></svg><span class="label" id="xlLabel">Browse Excel file</span></div>
-          <button class="btn mint" id="btnImport">Add</button>
+        <div class="well col">
+          <div class="excel-controls">
+            <button type="button" class="field click" id="xlPick"><svg class="i"><use href="#i-table"/></svg><span class="label" id="xlLabel">Browse Excel file</span></button>
+            <button class="btn mint" id="btnImport">Import</button>
+          </div>
+          <button type="button" class="excel-template" id="xlTemplate">Open Excel template</button>
         </div>
 
         <div class="well col">
@@ -296,7 +303,7 @@ aside{display:flex;flex-direction:column;gap:14px;min-height:0}
           <div class="farm" id="farm" role="switch" aria-checked="false" tabindex="0"><span class="sw"></span><span class="t">FARMERS FILE NAMING</span></div>
           <div class="preview" id="preview"></div>
         </div>
-        <div class="hint">Excel: A = <b>urls</b>, B = <b>file name</b> · paste or drop links anywhere</div>
+        <div class="hint">Excel dates filter Instagram Highlights. Paste or drop links anywhere.</div>
       </div>
 
       <div class="actions">
@@ -434,6 +441,15 @@ async function addFromForm() {
 $("#btnAdd").onclick = addFromForm;
 ["#url", "#highlightStart", "#highlightEnd"].forEach(s => $(s).addEventListener("keydown", e => { if (e.key === "Enter") addFromForm(); }));
 
+$("#xlTemplate").onclick = async () => {
+  const r = await api("/api/excel-template", {});
+  if (r.ok) {
+    setXl(r.path);
+    toast("Fill in the rows, save the workbook, then click Import.");
+  } else {
+    toast(r.msg);
+  }
+};
 $("#xlPick").onclick = async () => {
   const r = await api("/api/browse-excel", {});
   if (r.path) setXl(r.path);
@@ -442,7 +458,7 @@ function setXl(p) { xlPath = p; $("#xlLabel").textContent = p ? p.split(/[\\/]/)
 $("#btnImport").onclick = async () => {
   if (!xlPath) { const r = await api("/api/browse-excel", {}); if (!r.path) return; setXl(r.path); }
   const r = await api("/api/import", { path: xlPath, highlight_start: $("#highlightStart").value, highlight_end: $("#highlightEnd").value });
-  toast(r.msg); if (r.ok) { setXl(""); poll(); }
+  toast(r.msg); if (r.ok) poll();
 };
 /* paste / drop links anywhere */
 document.addEventListener("paste", e => {
@@ -596,7 +612,7 @@ function apply(s) {
   go.innerHTML = r.active ? `${icon("stop")}<span>${r.cancelling ? "Stopping…" : "Stop"}</span>` : `${icon("download")}<span>Download</span>`;
   go.disabled = !r.active && (!pending || !s.ytdlp);
   $("#btnClear").disabled = r.active || !items.length;
-  ["#parallel", "#btnFolder", "#btnImport", "#folder", "#fname", "#zipOn", "#zipOff"].forEach(x => $(x).disabled = r.active);
+  ["#parallel", "#btnFolder", "#btnImport", "#xlPick", "#xlTemplate", "#folder", "#fname", "#zipOn", "#zipOff"].forEach(x => $(x).disabled = r.active);
   let pct = 0, txt = "";
   if (r.active) {
     const part = items.filter(i => i.status === "downloading").reduce((a, i) => a + i.progress / 100, 0);

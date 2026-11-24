@@ -1480,7 +1480,11 @@ def _cell_text(v):
 
 
 def read_xlsx(path):
-    z = zipfile.ZipFile(path)
+    with zipfile.ZipFile(path) as z:
+        return read_xlsx_rows(z)
+
+
+def read_xlsx_rows(z):
     names = z.namelist()
     shared = []
     if "xl/sharedStrings.xml" in names:
@@ -1497,9 +1501,13 @@ def read_xlsx(path):
                 code = re.sub(r'"[^"]*"|\[[^\]]*\]|\\.', "", fmts.get(fid, "")).lower()
                 if fid in BUILTIN_DATE_IDS or (fid in fmts and re.search(r"[dy]", code)):
                     date_xf.add(i)
+    epoch = dt.date(1899, 12, 30)
     sheet_path = "xl/worksheets/sheet1.xml"
     try:
         wb = ET.fromstring(z.read("xl/workbook.xml"))
+        properties = wb.find(M + "workbookPr")
+        if properties is not None and properties.get("date1904") in ("1", "true"):
+            epoch = dt.date(1904, 1, 1)
         first = next(wb.iter(M + "sheet"))
         rid = first.get(R + "id")
         rels = ET.fromstring(z.read("xl/_rels/workbook.xml.rels"))
@@ -1527,12 +1535,13 @@ def read_xlsx(path):
                 val = v.text
                 if t not in ("str", "b", "e") and s in date_xf:
                     try:
-                        d = dt.date(1899, 12, 30) + dt.timedelta(days=float(val))
+                        d = epoch + dt.timedelta(days=float(val))
                         val = d.strftime("%m-%d-%Y")
-                    except ValueError:
+                    except (ValueError, OverflowError):
                         pass
             cols[col] = val
-        rows.append((_cell_text(cols.get("A")), _cell_text(cols.get("B"))))
+        values = tuple(_cell_text(cols.get(col)) for col in "ABCD")
+        rows.append((int(row.get("r") or len(rows) + 1), values))
     return rows
 
 
@@ -1542,18 +1551,20 @@ def read_table(path):
         rows = read_xlsx(path)
     elif ext in (".csv", ".txt"):
         with open(path, "r", encoding="utf-8-sig", newline="") as f:
-            rows = [((r[0] if r else "").strip(), (r[1] if len(r) > 1 else "").strip())
-                    for r in csv.reader(f)]
+            rows = [(i, tuple(cell.strip() for cell in (row + [""] * 4)[:4]))
+                    for i, row in enumerate(csv.reader(f), 1)]
     else:
         raise ValueError("Please choose an .xlsx or .csv file (old .xls is not supported - re-save as .xlsx)")
-    out = []
-    for i, (a, b) in enumerate(rows):
-        if not a:
-            continue
-        if i == 0 and a.lower() in ("url", "urls", "link", "links"):
-            continue
-        out.append((a, b))
-    return out
+    if not rows:
+        return [], False
+    header = rows[0][1]
+    has_header = header[0].lower() in ("url", "urls", "link", "links")
+    has_dates = (
+        header[1].lower() == "from" or header[2].lower() in ("through", "to", "through/to")
+        if has_header else any(row[2] or row[3] for _, row in rows)
+    )
+    data = rows[1:] if has_header else rows
+    return [(i, row) for i, row in data if row[0]], has_dates
 
 
 # --------------------------------------------------------------------------
@@ -1736,19 +1747,61 @@ def api_browse_excel(_):
     return {"ok": True, "path": native_dialog("file")}
 
 
-def api_import(b):
+EXCEL_TEMPLATE = "Queue Template.xlsx"
+
+
+def api_excel_template(_):
+    path = os.path.join(BASE, EXCEL_TEMPLATE)
+    if not os.path.isfile(path):
+        return {"ok": False, "msg": "Queue Template.xlsx is missing from the app folder."}
     try:
-        start, end = parse_highlight_range(b)
-    except ValueError:
-        return {"ok": False, "msg": "Use valid Highlight dates. The start must be on or before To, and To cannot be in the future."}
+        if IS_WIN:
+            os.startfile(path)
+        else:
+            subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", path])
+    except OSError:
+        return {"ok": False, "msg": "Open Queue Template.xlsx from the app folder in a spreadsheet editor."}
+    return {"ok": True, "path": path}
+
+
+def spreadsheet_date(value):
+    if not value:
+        return ""
+    for pattern in ("%Y-%m-%d", "%m-%d-%Y", "%m/%d/%Y", "%B %d, %Y"):
+        try:
+            return dt.datetime.strptime(value, pattern).date().isoformat()
+        except ValueError:
+            continue
+    raise ValueError
+
+
+def api_import(b):
     path = (b.get("path") or "").strip().strip('"')
     if not path or not os.path.isfile(path):
         return {"ok": False, "msg": "Choose an Excel file first"}
     try:
-        rows = read_table(path)
+        data, has_dates = read_table(path)
     except Exception as e:
         return {"ok": False, "msg": f"Could not read file: {e}"}
-    added = sum(1 for a, n in rows if add_item(a, n, start, end))
+    if not has_dates:
+        try:
+            default_range = parse_highlight_range(b)
+        except ValueError:
+            return {"ok": False, "msg": "Use valid Highlight dates in the queue before importing."}
+    rows = []
+    for row_number, (url, second, through, name) in data:
+        if not has_dates:
+            rows.append((url, second, *default_range))
+            continue
+        try:
+            dates = parse_highlight_range({
+                "highlight_start": spreadsheet_date(second),
+                "highlight_end": spreadsheet_date(through),
+            }) if ig_story_title(norm_url(url)) == "Instagram Highlight" else (None, None)
+        except ValueError:
+            return {"ok": False, "msg": f"Row {row_number}: use valid Highlight dates. From must be on or before Through/To, and Through/To cannot be in the future."}
+        rows.append((url, name, *dates))
+    added = sum(1 for row in rows if add_item(*row))
     if not rows:
         return {"ok": False, "msg": "No links found in column A"}
     msg = f"Imported {added} of {len(rows)} link{'s' if len(rows) != 1 else ''}"
@@ -1801,7 +1854,7 @@ def api_chrome_pair(_):
 ROUTES = {"/api/chrome-pair": api_chrome_pair, "/api/add": api_add, "/api/rename": api_rename, "/api/pick": api_pick, "/api/remove": api_remove,
           "/api/clear": api_clear, "/api/retry": api_retry, "/api/settings": api_settings,
           "/api/browse-folder": api_browse_folder, "/api/browse-excel": api_browse_excel,
-          "/api/import": api_import, "/api/download": api_download, "/api/cancel": api_cancel,
+          "/api/excel-template": api_excel_template, "/api/import": api_import, "/api/download": api_download, "/api/cancel": api_cancel,
           "/api/open": api_open, "/api/update": api_update, "/api/quit": api_quit}
 
 
