@@ -13,7 +13,11 @@ Use
   the app uses UNKNOWN.
 - Click any file name in the queue to rename it before downloading.
 - Folder name field (next to ZIP / NOT ZIP) = the .zip name, or the sub-folder name.
-- Excel/CSV: column A = urls, column B = file name (first row may be a header).
+- Click Open Excel template to open Queue Template.xlsx in the app folder.
+  Fill in the rows starting at row 2, save the workbook, then click Import.
+  Columns are URL, From, Through/To, and File Name (optional). From and
+  Through/To are optional inclusive dates for Instagram Highlights. Use Excel
+  date cells or YYYY-MM-DD. Older two-column Excel/CSV imports still work.
 - FARMERS FILE NAMING ON:  {Social Media} video captured {today}, and posted {posted date or custom name}
   e.g. YouTube video captured 10-20-2025, and posted 09-01-2024
   Both automatic dates use the selected format.
